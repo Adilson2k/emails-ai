@@ -1,0 +1,1 @@
+// Serviço de análise de email usando a API do Gemini
