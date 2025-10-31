@@ -50,7 +50,7 @@ class EmailAlertService {
   private setupRoutes(): void {
 
     // ✅ Rota base (root)
-app.get('/', (_req: Request, res: Response) => {
+this.app.get('/', (_req: Request, res: Response) => {
   res.status(200).json({
     status: 'API online ✅',
     message: 'Serviço de leitura de emails e envios de SMS ativo',
