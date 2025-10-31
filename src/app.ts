@@ -48,6 +48,17 @@ class EmailAlertService {
    * Configura as rotas da API
    */
   private setupRoutes(): void {
+
+    // ✅ Rota base (root)
+app.get('/', (_req: Request, res: Response) => {
+  res.status(200).json({
+    status: 'API online ✅',
+    message: 'Serviço de leitura de emails e envios de SMS ativo',
+    endpoints: {
+      health: '/health',
+    },
+  });
+});
     // Rotas de autenticação
     this.app.use(authRoutes);
 
