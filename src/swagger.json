@@ -1,0 +1,155 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "Emails AI Alert Service API",
+    "version": "1.0.0",
+    "description": "API para leitura de emails, análise com AI e envio de alertas via SMS. Documentação gerada automaticamente."
+  },
+  "servers": [
+    { "url": "http://localhost:3000", "description": "Local" }
+  ],
+  "paths": {
+    "/": {
+      "get": {
+        "summary": "Rota root",
+        "responses": {
+          "200": { "description": "API online", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RootResponse" } } } }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health check",
+        "responses": {
+          "200": { "description": "Status OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/HealthResponse" } } } }
+        }
+      }
+    },
+    "/status": {
+      "get": {
+        "summary": "Status dos serviços (IMAP, Gemini, SMS, DB)",
+        "responses": {
+          "200": { "description": "Status dos serviços", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/StatusResponse" } } } },
+          "500": { "description": "Erro interno" }
+        }
+      }
+    },
+    "/stats": {
+      "get": {
+        "summary": "Estatísticas da caixa de email",
+        "responses": {
+          "200": { "description": "Estatísticas retornadas", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EmailStats" } } } },
+          "500": { "description": "Erro interno" }
+        }
+      }
+    },
+    "/test-sms": {
+      "post": {
+        "summary": "Enviar SMS de teste",
+        "responses": {
+          "200": { "description": "Resultado do envio", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SMSResult" } } } },
+          "500": { "description": "Erro ao enviar SMS" }
+        }
+      }
+    },
+    "/listener/start": {
+      "post": {
+        "summary": "Iniciar listener",
+        "responses": { "200": { "description": "Listener iniciado" }, "500": { "description": "Erro ao iniciar" } }
+      }
+    },
+    "/listener/stop": {
+      "post": {
+        "summary": "Parar listener",
+        "responses": { "200": { "description": "Listener parado" }, "500": { "description": "Erro ao parar" } }
+      }
+    },
+    "/process-email": {
+      "post": {
+        "summary": "Processar um email manualmente (teste)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ProcessEmailRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Análise retornada", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ProcessEmailResponse" } } } },
+          "400": { "description": "Campos obrigatórios faltando" },
+          "500": { "description": "Erro ao processar email" }
+        }
+      }
+    },
+    "/emails": {
+      "get": {
+        "summary": "Listar emails processados",
+        "parameters": [
+          { "name": "importance", "in": "query", "schema": { "type": "string" }, "description": "Filtrar por importância (alta, média, baixa)" },
+          { "name": "from", "in": "query", "schema": { "type": "string" }, "description": "Filtrar por remetente" },
+          { "name": "limit", "in": "query", "schema": { "type": "integer" }, "description": "Limite de itens (padrão 50)" },
+          { "name": "offset", "in": "query", "schema": { "type": "integer" }, "description": "Offset para paginação" }
+        ],
+        "responses": {
+          "200": { "description": "Lista de emails", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/EmailItem" } } } } },
+          "500": { "description": "Erro ao buscar emails" }
+        }
+      }
+    },
+    "/emails/stats": {
+      "get": {
+        "summary": "Estatísticas de emails nos últimos N dias",
+        "parameters": [ { "name": "days", "in": "query", "schema": { "type": "integer" }, "description": "Número de dias (padrão 7)" } ],
+        "responses": { "200": { "description": "Estatísticas", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EmailStats" } } } }, "500": { "description": "Erro" } }
+      }
+    },
+    "/emails/general-stats": {
+      "get": { "summary": "Estatísticas gerais de emails processados", "responses": { "200": { "description": "Estatísticas gerais", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/GeneralStats" } } } }, "500": { "description": "Erro" } } }
+    },
+    "/auth/register": {
+      "post": {
+        "summary": "Registrar usuário",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RegisterRequest" } } } },
+        "responses": { "201": { "description": "Usuário criado" }, "400": { "description": "Dados inválidos" }, "409": { "description": "Email já cadastrado" }, "500": { "description": "Erro" } }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "summary": "Login de usuário",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LoginRequest" } } } },
+        "responses": { "200": { "description": "Token JWT", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LoginResponse" } } } }, "401": { "description": "Credenciais inválidas" }, "400": { "description": "Dados faltando" } }
+      }
+    },
+    "/me": {
+      "get": {
+        "summary": "Obter dados do usuário autenticado",
+        "security": [ { "bearerAuth": [] } ],
+        "responses": { "200": { "description": "Usuário", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/User" } } } }, "401": { "description": "Não autenticado" } }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": { "type": "http", "scheme": "bearer", "bearerFormat": "JWT" }
+    },
+    "schemas": {
+      "RootResponse": {
+        "type": "object",
+        "properties": { "status": { "type": "string" }, "message": { "type": "string" }, "endpoints": { "type": "object" } }
+      },
+      "HealthResponse": { "type": "object", "properties": { "status": { "type": "string" }, "timestamp": { "type": "string", "format": "date-time" } } },
+      "StatusResponse": { "type": "object" },
+      "EmailStats": { "type": "object" },
+      "SMSResult": { "type": "object", "properties": { "success": { "type": "boolean" }, "message": { "type": "string" } } },
+      "ProcessEmailRequest": { "type": "object", "required": [ "subject", "content", "from" ], "properties": { "subject": { "type": "string" }, "content": { "type": "string" }, "from": { "type": "string" } } },
+      "ProcessEmailResponse": { "type": "object" },
+      "EmailItem": { "type": "object", "properties": { "id": { "type": "string" }, "from": { "type": "string" }, "subject": { "type": "string" }, "importance": { "type": "string" }, "receivedAt": { "type": "string", "format": "date-time" } } },
+      "GeneralStats": { "type": "object" },
+      "RegisterRequest": { "type": "object", "required": [ "name", "email", "password" ], "properties": { "name": { "type": "string" }, "email": { "type": "string" }, "password": { "type": "string" }, "phone_number": { "type": "string" }, "plan": { "type": "string" } } },
+      "LoginRequest": { "type": "object", "required": [ "email", "password" ], "properties": { "email": { "type": "string" }, "password": { "type": "string" } } },
+      "LoginResponse": { "type": "object", "properties": { "token": { "type": "string" } } },
+      "User": { "type": "object", "properties": { "id": { "type": "string" }, "name": { "type": "string" }, "email": { "type": "string" }, "phone_number": { "type": "string" }, "plan": { "type": "string" } } }
+    }
+  }
+}
