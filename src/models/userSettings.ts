@@ -1,7 +1,9 @@
 import mongoose, { Schema, Document } from 'mongoose';
 import crypto from 'crypto';
 
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'your-fallback-encryption-key-32-chars!!'; // 32 bytes
+const ENCRYPTION_SECRET = process.env.ENCRYPTION_KEY || 'your-fallback-encryption-key-32-chars!!';
+// Deriva uma chave de 32 bytes de forma determinística
+const KEY_BYTES = crypto.createHash('sha256').update(ENCRYPTION_SECRET).digest().subarray(0, 32);
 const IV_LENGTH = 16;
 
 export interface IUserSettings extends Document {
@@ -20,7 +22,7 @@ export interface IUserSettings extends Document {
 // Funções auxiliares de criptografia
 function encrypt(text: string): string {
   const iv = crypto.randomBytes(IV_LENGTH);
-  const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY), iv);
+  const cipher = crypto.createCipheriv('aes-256-cbc', KEY_BYTES, iv);
   let encrypted = cipher.update(text);
   encrypted = Buffer.concat([encrypted, cipher.final()]);
   return `${iv.toString('hex')}:${encrypted.toString('hex')}`;
@@ -35,7 +37,7 @@ function decrypt(text: string): string {
     const [ivHex, encryptedHex] = text.split(':');
     const iv = Buffer.from(ivHex, 'hex');
     const encrypted = Buffer.from(encryptedHex, 'hex');
-    const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY), iv);
+    const decipher = crypto.createDecipheriv('aes-256-cbc', KEY_BYTES, iv);
     let decrypted = decipher.update(encrypted);
     decrypted = Buffer.concat([decrypted, decipher.final()]);
     return decrypted.toString();

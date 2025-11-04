@@ -8,6 +8,7 @@ export interface IEmailAnalysis {
 }
 
 export interface IProcessedEmail extends Document {
+  userId: mongoose.Types.ObjectId;
   messageId: string;
   from: string;
   to: string;
@@ -43,6 +44,7 @@ export interface IUserConfig extends Document {
 }
 
 export interface IEmailStats extends Document {
+  userId: mongoose.Types.ObjectId;
   date: Date;
   totalEmails: number;
   highPriority: number;
@@ -55,7 +57,8 @@ export interface IEmailStats extends Document {
 
 // Schema para emails processados
 const ProcessedEmailSchema = new Schema<IProcessedEmail>({
-  messageId: { type: String, required: true, unique: true },
+  userId: { type: Schema.Types.ObjectId, required: true, index: true },
+  messageId: { type: String, required: true },
   from: { type: String, required: true },
   to: { type: String, required: true },
   subject: { type: String, required: true },
@@ -97,7 +100,8 @@ const UserConfigSchema = new Schema<IUserConfig>({
 
 // Schema para estatísticas diárias
 const EmailStatsSchema = new Schema<IEmailStats>({
-  date: { type: Date, required: true, unique: true },
+  userId: { type: Schema.Types.ObjectId, required: true, index: true },
+  date: { type: Date, required: true },
   totalEmails: { type: Number, default: 0 },
   highPriority: { type: Number, default: 0 },
   mediumPriority: { type: Number, default: 0 },
@@ -108,11 +112,13 @@ const EmailStatsSchema = new Schema<IEmailStats>({
 });
 
 // Índices para melhor performance
-ProcessedEmailSchema.index({ processedAt: -1 });
+ProcessedEmailSchema.index({ userId: 1, processedAt: -1 });
+ProcessedEmailSchema.index({ userId: 1, messageId: 1 }, { unique: true });
 ProcessedEmailSchema.index({ 'analysis.importance': 1 });
 ProcessedEmailSchema.index({ from: 1 });
 
-EmailStatsSchema.index({ date: -1 });
+EmailStatsSchema.index({ userId: 1, date: -1 });
+EmailStatsSchema.index({ userId: 1, date: 1 }, { unique: true });
 
 // Modelos
 export const ProcessedEmail = mongoose.model<IProcessedEmail>('ProcessedEmail', ProcessedEmailSchema);

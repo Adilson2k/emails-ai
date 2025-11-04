@@ -5,12 +5,14 @@ import morgan from 'morgan';
 import { config } from './config';
 import { connectToDatabase, getDatabaseConnectionState } from './config/database';
 import { EmailListener } from './services/emailListener';
+import { EmailListenerRegistry } from './services/emailListenerRegistry';
 import { EmailProcessor } from './services/emailProcessor';
 import { SMSService } from './services/smsService';
 import { GeminiService } from './services/aiService';
 import { DatabaseService } from './services/databaseService';
 import authRoutes from './routes/auth';
 import settingsRoutes from './routes/settings';
+import { authMiddleware } from './middlewares/auth';
 import { AuthenticatedRequest } from './types/express';
 import swaggerUi from 'swagger-ui-express';
 import * as fs from 'fs';
@@ -20,6 +22,7 @@ import * as path from 'path';
 class EmailAlertService {
   private app: Application;
   private emailListener: EmailListener;
+  private listenerRegistry: EmailListenerRegistry;
   private processor: EmailProcessor;
   private smsService: SMSService;
   private geminiService: GeminiService;
@@ -28,6 +31,7 @@ class EmailAlertService {
   constructor() {
     this.app = express();
     this.emailListener = new EmailListener();
+    this.listenerRegistry = new EmailListenerRegistry();
     this.processor = new EmailProcessor();
     this.smsService = new SMSService();
     this.geminiService = new GeminiService();
@@ -92,16 +96,23 @@ class EmailAlertService {
       });
     });
 
-    // Status dos serviços
-    this.app.get('/status', async (req: Request, res: Response) => {
+    // Status dos serviços (por usuário autenticado)
+    this.app.get('/status', authMiddleware, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
       try {
+        const userId = req.user?.id as string;
+        if (!userId) {
+          res.status(401).json({ error: 'Não autenticado' });
+          return;
+        }
+
+        const userSmsService = new SMSService(userId);
         const [imapTest, geminiTest] = await Promise.all([
-          this.emailListener.testConnection(),
+          this.listenerRegistry.testForUser(userId),
           this.geminiService.testConnection()
         ]);
 
-        const smsConfigured = await this.smsService.isConfigured();
-        const smsNumbers = await this.smsService.getConfiguredNumbers();
+        const smsConfigured = await userSmsService.isConfigured();
+        const smsNumbers = await userSmsService.getConfiguredNumbers();
 
         res.json({
           imap: {
@@ -120,7 +131,7 @@ class EmailAlertService {
             connected: getDatabaseConnectionState() === 'Conectado',
             state: getDatabaseConnectionState()
           },
-          listener: this.emailListener.getStatus()
+          listener: this.listenerRegistry.statusForUser(userId)
         });
       } catch (error) {
         res.status(500).json({ error: 'Erro ao verificar status dos serviços' });
@@ -128,19 +139,28 @@ class EmailAlertService {
     });
 
     // Estatísticas da caixa de email
-    this.app.get('/stats', async (req: Request, res: Response) => {
+    this.app.get('/stats', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
       try {
-        const stats = await this.emailListener.getStats();
+        const userId = req.user?.id as string;
+        const listener = this.listenerRegistry.getOrCreate(userId);
+        const stats = await listener.getStats();
         res.json(stats);
       } catch (error) {
         res.status(500).json({ error: 'Erro ao obter estatísticas' });
       }
     });
 
-    // Teste de SMS
-    this.app.post('/test-sms', async (req: Request, res: Response) => {
+    // Teste de SMS (autenticado)
+    this.app.post('/test-sms', authMiddleware, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
       try {
-        const result = await this.smsService.sendTestSMS();
+        const userId = req.user?.id;
+        if (!userId) {
+          res.status(401).json({ error: 'Não autenticado' });
+          return;
+        }
+
+        const userSmsService = new SMSService(userId);
+        const result = await userSmsService.sendTestSMS();
         res.json(result);
       } catch (error) {
         res.status(500).json({ error: 'Erro ao enviar SMS de teste' });
@@ -148,18 +168,20 @@ class EmailAlertService {
     });
 
     // Controle do listener
-    this.app.post('/listener/start', async (req: Request, res: Response) => {
+    this.app.post('/listener/start', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
       try {
-        await this.emailListener.start();
+        const userId = req.user?.id as string;
+        await this.listenerRegistry.startForUser(userId);
         res.json({ message: 'Listener iniciado com sucesso' });
       } catch (error) {
         res.status(500).json({ error: 'Erro ao iniciar listener' });
       }
     });
 
-    this.app.post('/listener/stop', async (req: Request, res: Response) => {
+    this.app.post('/listener/stop', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
       try {
-        await this.emailListener.stop();
+        const userId = req.user?.id as string;
+        await this.listenerRegistry.stopForUser(userId);
         res.json({ message: 'Listener parado com sucesso' });
       } catch (error) {
         res.status(500).json({ error: 'Erro ao parar listener' });
@@ -192,12 +214,19 @@ class EmailAlertService {
       }
     });
 
-    // Endpoints do banco de dados
-    this.app.get('/emails', async (req: Request, res: Response) => {
+    // Endpoints do banco de dados (autenticados)
+    this.app.get('/emails', authMiddleware, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
       try {
+        const userId = req.user?.id;
+        if (!userId) {
+          res.status(401).json({ error: 'Não autenticado' });
+          return;
+        }
+
         const { importance, from, limit = '50', offset = '0' } = req.query;
         
         const emails = await this.databaseService.getProcessedEmails({
+          userId,
           importance: importance as string,
           from: from as string,
           limit: parseInt(limit as string),
@@ -210,19 +239,31 @@ class EmailAlertService {
       }
     });
 
-    this.app.get('/emails/stats', async (req: Request, res: Response) => {
+    this.app.get('/emails/stats', authMiddleware, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
       try {
+        const userId = req.user?.id;
+        if (!userId) {
+          res.status(401).json({ error: 'Não autenticado' });
+          return;
+        }
+
         const { days = '7' } = req.query;
-        const stats = await this.databaseService.getEmailStats(parseInt(days as string));
+        const stats = await this.databaseService.getEmailStats(userId, parseInt(days as string));
         res.json(stats);
       } catch (error) {
         res.status(500).json({ error: 'Erro ao buscar estatísticas' });
       }
     });
 
-    this.app.get('/emails/general-stats', async (req: Request, res: Response) => {
+    this.app.get('/emails/general-stats', authMiddleware, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
       try {
-        const stats = await this.databaseService.getGeneralStats();
+        const userId = req.user?.id;
+        if (!userId) {
+          res.status(401).json({ error: 'Não autenticado' });
+          return;
+        }
+
+        const stats = await this.databaseService.getGeneralStats(userId);
         res.json(stats);
       } catch (error) {
         res.status(500).json({ error: 'Erro ao buscar estatísticas gerais' });
@@ -265,10 +306,8 @@ class EmailAlertService {
         console.log(`📈 Status: http://localhost:${config.port}/status`);
       });
       
-      // Inicia o listener de emails
-      await this.emailListener.start();
-      
-      console.log('✅ Email Alert Service iniciado com sucesso!');
+      // Listeners por usuário serão iniciados sob demanda via /listener/start
+      console.log('✅ Email Alert Service iniciado com sucesso! (modo multiusuário)');
     } catch (error) {
       console.error('❌ Erro ao iniciar serviço:', error);
       process.exit(1);

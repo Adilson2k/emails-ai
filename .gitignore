@@ -121,3 +121,11 @@ ecosystem.config.js
 # Backup files
 *.backup
 *.bak
+
+# Diretório de testes
+__tests__/
+
+# Arquivos de teste na raiz ou em qualquer subdiretório
+# O caractere * (asterisco) atua como um curinga
+*.test.*
+*.spec.*

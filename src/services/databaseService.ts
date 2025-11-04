@@ -1,11 +1,13 @@
 import { ProcessedEmail, UserConfig, EmailStats, IProcessedEmail, IUserConfig, IEmailStats } from '../models';
 import { EmailAnalysis } from '../services/aiService';
+import mongoose from 'mongoose';
 
 export class DatabaseService {
   /**
    * Salva um email processado no banco de dados usando upsert para evitar duplicatas
    */
   async saveProcessedEmail(emailData: {
+    userId: string;
     messageId: string;
     from: string;
     to: string;
@@ -16,11 +18,14 @@ export class DatabaseService {
     smsSent: boolean;
   }): Promise<IProcessedEmail> {
     try {
+      const userIdObj = new mongoose.Types.ObjectId(emailData.userId);
+      
       // Usa updateOne com upsert: true para evitar erro de chave duplicada
       const email = await ProcessedEmail.findOneAndUpdate(
-        { messageId: emailData.messageId },
+        { userId: userIdObj, messageId: emailData.messageId },
         {
           $set: {
+            userId: userIdObj,
             messageId: emailData.messageId,
             from: emailData.from,
             to: emailData.to,
@@ -36,7 +41,7 @@ export class DatabaseService {
       );
       
       // Atualiza estatísticas diárias
-      await this.updateDailyStats(emailData.analysis.importance, emailData.smsSent);
+      await this.updateDailyStats(emailData.userId, emailData.analysis.importance, emailData.smsSent);
       
       return email;
     } catch (error) {
@@ -49,15 +54,17 @@ export class DatabaseService {
    * Busca emails processados com filtros
    */
   async getProcessedEmails(filters: {
+    userId: string;
     importance?: string;
     from?: string;
     dateFrom?: Date;
     dateTo?: Date;
     limit?: number;
     offset?: number;
-  } = {}): Promise<IProcessedEmail[]> {
+  }): Promise<IProcessedEmail[]> {
     try {
-      const query: any = {};
+      const userIdObj = new mongoose.Types.ObjectId(filters.userId);
+      const query: any = { userId: userIdObj };
       
       if (filters.importance) {
         query['analysis.importance'] = filters.importance;
@@ -89,13 +96,14 @@ export class DatabaseService {
   /**
    * Busca estatísticas de emails
    */
-  async getEmailStats(days: number = 7): Promise<IEmailStats[]> {
+  async getEmailStats(userId: string, days: number = 7): Promise<IEmailStats[]> {
     try {
+      const userIdObj = new mongoose.Types.ObjectId(userId);
       const dateFrom = new Date();
       dateFrom.setDate(dateFrom.getDate() - days);
 
       const stats = await EmailStats
-        .find({ date: { $gte: dateFrom } })
+        .find({ userId: userIdObj, date: { $gte: dateFrom } })
         .sort({ date: -1 });
 
       return stats;
@@ -108,8 +116,9 @@ export class DatabaseService {
   /**
    * Atualiza estatísticas diárias
    */
-  private async updateDailyStats(importance: string, smsSent: boolean): Promise<void> {
+  private async updateDailyStats(userId: string, importance: string, smsSent: boolean): Promise<void> {
     try {
+      const userIdObj = new mongoose.Types.ObjectId(userId);
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
@@ -134,8 +143,8 @@ export class DatabaseService {
       }
 
       await EmailStats.findOneAndUpdate(
-        { date: today },
-        updateData,
+        { userId: userIdObj, date: today },
+        { ...updateData, $set: { userId: userIdObj } },
         { upsert: true, new: true }
       );
     } catch (error) {
@@ -177,7 +186,7 @@ export class DatabaseService {
   /**
    * Busca estatísticas gerais
    */
-  async getGeneralStats(): Promise<{
+  async getGeneralStats(userId: string): Promise<{
     totalEmails: number;
     highPriority: number;
     mediumPriority: number;
@@ -186,8 +195,10 @@ export class DatabaseService {
     uniqueSenders: number;
   }> {
     try {
+      const userIdObj = new mongoose.Types.ObjectId(userId);
       const [emailStats, senderStats] = await Promise.all([
         ProcessedEmail.aggregate([
+          { $match: { userId: userIdObj } },
           {
             $group: {
               _id: null,
@@ -199,7 +210,7 @@ export class DatabaseService {
             }
           }
         ]),
-        ProcessedEmail.distinct('from')
+        ProcessedEmail.distinct('from', { userId: userIdObj })
       ]);
 
       const stats = emailStats[0] || {
@@ -223,9 +234,10 @@ export class DatabaseService {
   /**
    * Verifica se um email já foi processado
    */
-  async isEmailProcessed(messageId: string): Promise<boolean> {
+  async isEmailProcessed(userId: string, messageId: string): Promise<boolean> {
     try {
-      const email = await ProcessedEmail.findOne({ messageId });
+      const userIdObj = new mongoose.Types.ObjectId(userId);
+      const email = await ProcessedEmail.findOne({ userId: userIdObj, messageId });
       return !!email;
     } catch (error) {
       console.error('❌ Erro ao verificar email processado:', error);

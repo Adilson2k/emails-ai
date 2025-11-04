@@ -17,19 +17,17 @@ export interface ProcessedEmail {
 
 export class EmailProcessor {
   private geminiService: GeminiService;
-  private smsService: SMSService;
   private databaseService: DatabaseService;
 
   constructor() {
     this.geminiService = new GeminiService();
-    this.smsService = new SMSService();
     this.databaseService = new DatabaseService();
   }
 
   /**
    * Processa um email completo
    */
-  async processEmail(emailBuffer: Buffer, emailId: string): Promise<ProcessedEmail> {
+  async processEmail(emailBuffer: Buffer, emailId: string, userId: string): Promise<ProcessedEmail> {
     try {
       // Parseia o email
       const parsedEmail = await this.parseEmail(emailBuffer);
@@ -44,7 +42,8 @@ export class EmailProcessor {
       // Envia SMS se for importante
       let smsSent = false;
       if (analysis.importance === 'alta') {
-        const smsResult = await this.smsService.sendEmailAlert(
+        const smsService = new SMSService(userId);
+        const smsResult = await smsService.sendEmailAlert(
           this.extractFromAddress(parsedEmail),
           parsedEmail.subject || 'Sem assunto',
           analysis.summary
@@ -71,6 +70,7 @@ export class EmailProcessor {
       // Salva no banco de dados
       try {
         await this.databaseService.saveProcessedEmail({
+          userId,
           messageId: emailId,
           from: processedEmail.from,
           to: processedEmail.to,
@@ -202,9 +202,10 @@ Palavras-chave: ${processedEmail.analysis.keywords.join(', ')}
   /**
    * Testa os serviços dependentes
    */
-  async testServices(): Promise<{ gemini: boolean; sms: boolean }> {
+  async testServices(userId?: string): Promise<{ gemini: boolean; sms: boolean }> {
     const geminiTest = await this.geminiService.testConnection();
-  const smsTest = await this.smsService.isConfigured();
+    const smsService = userId ? new SMSService(userId) : null;
+    const smsTest = smsService ? await smsService.isConfigured() : false;
     
     return {
       gemini: geminiTest,

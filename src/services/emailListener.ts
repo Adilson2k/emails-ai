@@ -33,34 +33,18 @@ export class EmailListener {
   }
 
   private async getUserSettings(): Promise<IUserSettings> {
-    if (this.userId) {
-      const settings = await UserSettings.findOne({ userId: this.userId });
-      if (settings) {
-        // Descriptografa a senha para uso
-        const decryptedSettings = settings.toObject ? settings.toObject() : settings;
-        decryptedSettings.imapPassword = (settings as any).getDecryptedPassword();
-        return decryptedSettings as IUserSettings;
-      }
+    if (!this.userId) {
+      throw new Error('Listener sem userId. Este serviço requer credenciais por usuário.');
     }
 
-    // Fallback: usa as configurações globais do config (legado .env)
-    if (!config.email?.user || !config.email?.pass) {
-      throw new Error('Configurações de email não encontradas. Configure suas credenciais IMAP primeiro.');
+    const settings = await UserSettings.findOne({ userId: this.userId });
+    if (!settings) {
+      throw new Error('Configurações de email não encontradas para o usuário.');
     }
 
-    // Cria um objeto IUserSettings com dados do config para uso ad-hoc
-    const fallback: IUserSettings = {
-      userId: new mongoose.Types.ObjectId(),
-      imapEmail: config.email.user,
-      imapPassword: config.email.pass,
-      imapHost: config.email.host,
-      imapPort: config.email.port,
-      useGmailOAuth: false,
-      created_at: new Date(),
-      updated_at: new Date()
-    } as IUserSettings;
-
-    return fallback;
+    const decryptedSettings = settings.toObject ? settings.toObject() : settings;
+    decryptedSettings.imapPassword = (settings as any).getDecryptedPassword();
+    return decryptedSettings as IUserSettings;
   }
 
   private async createImapClient() {
@@ -103,6 +87,9 @@ export class EmailListener {
     try {
       console.log('🔄 Iniciando listener de emails...');
       
+      if (!this.client) {
+        await this.createImapClient();
+      }
       if (!this.client) {
         console.warn('⚠️ IMAP não configurado - listener não iniciado');
         return;
@@ -234,9 +221,13 @@ export class EmailListener {
       const emailBuffer = Buffer.concat(chunks);
 
       // Processa o email
+      if (!this.userId) {
+        throw new Error('UserId não definido no listener');
+      }
       const processedEmail = await this.processor.processEmail(
         emailBuffer,
-        messageId.toString()
+        messageId.toString(),
+        this.userId
       );
 
       // Marca como lido
