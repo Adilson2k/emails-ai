@@ -36,7 +36,10 @@ export class EmailListener {
     if (this.userId) {
       const settings = await UserSettings.findOne({ userId: this.userId });
       if (settings) {
-        return settings;
+        // Descriptografa a senha para uso
+        const decryptedSettings = settings.toObject ? settings.toObject() : settings;
+        decryptedSettings.imapPassword = (settings as any).getDecryptedPassword();
+        return decryptedSettings as IUserSettings;
       }
     }
 
@@ -44,19 +47,6 @@ export class EmailListener {
     if (!config.email?.user || !config.email?.pass) {
       throw new Error('Configurações de email não encontradas. Configure suas credenciais IMAP primeiro.');
     }
-
-    const settings: IUserSettings = {
-      userId: new mongoose.Types.ObjectId(),
-      imapEmail: config.email.user,
-      imapPassword: config.email.pass,
-      imapHost: config.email.host,
-      imapPort: config.email.port,
-      useGmailOAuth: false,
-      created_at: new Date(),
-      updated_at: new Date()
-    } as IUserSettings;
-
-    return settings;
 
     // Cria um objeto IUserSettings com dados do config para uso ad-hoc
     const fallback: IUserSettings = {

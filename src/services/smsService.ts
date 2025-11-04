@@ -31,7 +31,8 @@ export class SMSService {
     const settings = await this.getUserSettings();
     if (settings && settings.smsToken) {
       const numbers = settings.smsPhone ? [settings.smsPhone] : [];
-      return { token: settings.smsToken, numbers };
+      const decryptedToken = (settings as any).getDecryptedToken();
+      return { token: decryptedToken, numbers };
     }
 
     // Fallback para config

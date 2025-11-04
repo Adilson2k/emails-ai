@@ -4,12 +4,14 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import { config } from './config';
 import { connectToDatabase, getDatabaseConnectionState } from './config/database';
-import EmailListener from './services/emailListener';
+import { EmailListener } from './services/emailListener';
 import { EmailProcessor } from './services/emailProcessor';
 import { SMSService } from './services/smsService';
 import { GeminiService } from './services/aiService';
 import { DatabaseService } from './services/databaseService';
 import authRoutes from './routes/auth';
+import settingsRoutes from './routes/settings';
+import { AuthenticatedRequest } from './types/express';
 import swaggerUi from 'swagger-ui-express';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -25,9 +27,9 @@ class EmailAlertService {
 
   constructor() {
     this.app = express();
-  this.emailListener = new EmailListener();
+    this.emailListener = new EmailListener();
     this.processor = new EmailProcessor();
-  this.smsService = new SMSService();
+    this.smsService = new SMSService();
     this.geminiService = new GeminiService();
     this.databaseService = new DatabaseService();
     
@@ -65,6 +67,9 @@ class EmailAlertService {
   });
     // Rotas de autenticação
     this.app.use(authRoutes);
+    
+    // Rotas de configurações
+    this.app.use('/settings', settingsRoutes);
 
     // Swagger UI - documentação
     try {

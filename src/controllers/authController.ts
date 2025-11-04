@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import * as jwt from 'jsonwebtoken';
 import { User } from '../models/user';
+import { AuthenticatedRequest } from '../types/express';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'segredo_saas_default';
 const JWT_EXPIRATION = process.env.JWT_EXPIRES_IN || '7d';
@@ -24,7 +25,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       email,
       password: hashed,
       phone_number,
-      plan: plan || 'free',
+      plan: plan || 'gratuito',
     });
     res.status(201).json({ message: 'Usuário criado com sucesso.' });
     return;
@@ -69,9 +70,8 @@ export const login = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-export const getMe = async (req: Request, res: Response): Promise<void> => {
-  //@ts-ignore
-  const userId = req.userId;
+export const getMe = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const userId = req.user?.id;
   if (!userId) {
     res.status(401).json({ error: 'Não autenticado.' });
     return;
