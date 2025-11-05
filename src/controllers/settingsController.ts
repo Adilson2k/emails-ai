@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { UserSettings, IUserSettings } from '../models/userSettings';
 import { handleResponse } from '../utils/response';
 import { AuthenticatedRequest } from '../types/express';
+import { emailListenerRegistry } from '../services/registry';
 
 export const settingsController = {
   /**
@@ -69,6 +70,15 @@ export const settingsController = {
           runValidators: true
         }
       );
+
+      // Auto-start listener após salvar as configurações
+      if (userId) {
+        try {
+          await emailListenerRegistry.startForUser(userId);
+        } catch (e) {
+          console.warn('Falha ao iniciar listener automaticamente para o usuário:', e);
+        }
+      }
 
       return handleResponse(res, 200, {
         message: 'Configurações salvas com sucesso',

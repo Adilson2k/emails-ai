@@ -5,7 +5,7 @@ import morgan from 'morgan';
 import { config } from './config';
 import { connectToDatabase, getDatabaseConnectionState } from './config/database';
 import { EmailListener } from './services/emailListener';
-import { EmailListenerRegistry } from './services/emailListenerRegistry';
+import { emailListenerRegistry } from './services/registry';
 import { EmailProcessor } from './services/emailProcessor';
 import { SMSService } from './services/smsService';
 import { GeminiService } from './services/aiService';
@@ -22,7 +22,7 @@ import * as path from 'path';
 class EmailAlertService {
   private app: Application;
   private emailListener: EmailListener;
-  private listenerRegistry: EmailListenerRegistry;
+  private listenerRegistry: any;
   private processor: EmailProcessor;
   private smsService: SMSService;
   private geminiService: GeminiService;
@@ -31,7 +31,7 @@ class EmailAlertService {
   constructor() {
     this.app = express();
     this.emailListener = new EmailListener();
-    this.listenerRegistry = new EmailListenerRegistry();
+    this.listenerRegistry = emailListenerRegistry;
     this.processor = new EmailProcessor();
     this.smsService = new SMSService();
     this.geminiService = new GeminiService();
